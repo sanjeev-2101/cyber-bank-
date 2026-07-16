@@ -20,7 +20,14 @@ function App() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
   const [emails, setEmails] = useState<any[]>([]);
-  const [settings, setSettings] = useState({ quantumSafeActive: true, autoSuspensionThreshold: 85 });
+  const [settings, setSettings] = useState<any>({
+    quantumSafeActive: true, 
+    autoSuspensionThreshold: 85,
+    smtpActive: false,
+    whatsappActive: false,
+    recipientEmail: '',
+    recipientWhatsapp: ''
+  });
   
   // Interaction states
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
@@ -413,6 +420,8 @@ function App() {
                 onSelectIncident={(inc) => { playClickSound(); setSelectedIncident(inc); }}
                 selectedIncidentId={selectedIncident?.id}
                 isSimulating={isSimulating}
+                settings={settings}
+                onRefreshData={fetchAllData}
               />
             </div>
 

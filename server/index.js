@@ -1,5 +1,7 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
 import { db, dbHelpers } from './db.js';
 import { ThreatDetector } from './threatDetector.js';
 
@@ -85,7 +87,14 @@ app.post('/api/emails/:id/read', (req, res) => {
 
 // 9. GET SOC Settings
 app.get('/api/settings', (req, res) => {
-  res.json(dbHelpers.getSettings());
+  const settings = dbHelpers.getSettings();
+  res.json({
+    ...settings,
+    smtpActive: !!(process.env.SMTP_HOST && process.env.SMTP_USER),
+    whatsappActive: !!(process.env.TWILIO_ACCOUNT_SID && process.env.ALERT_RECIPIENT_WHATSAPP && process.env.ALERT_RECIPIENT_WHATSAPP !== '+91XXXXXXXXXX'),
+    recipientEmail: process.env.ALERT_RECIPIENT_EMAIL || 'sanjeevkumarnagarajan2@gmail.com',
+    recipientWhatsapp: process.env.ALERT_RECIPIENT_WHATSAPP || '+91XXXXXXXXXX'
+  });
 });
 
 // 10. POST Update SOC Settings
@@ -99,6 +108,76 @@ app.post('/api/reset', (req, res) => {
   dbHelpers.resetDb();
   console.log('[SYSTEM RESET] Database and security records restored to defaults.');
   res.json({ success: true, message: "System database reset successfully." });
+});
+
+// Ingest and audit Kaggle login security dataset
+app.post('/api/audit-kaggle', async (req, res) => {
+  try {
+    // Reset DB state first to allow clean evaluation of logins
+    dbHelpers.resetDb();
+
+    console.log('[AUDIT PROCESS] Ingesting Kaggle Login Events security log database...');
+    const rawData = fs.readFileSync('./kaggle_logins.json', 'utf8');
+    const logins = JSON.parse(rawData);
+
+    const report = [];
+    let anomaliesCount = 0;
+    let suspensionsCount = 0;
+
+    for (const login of logins) {
+      // Evaluate login against core AI engine
+      const evalResult = ThreatDetector.evaluateLogin(
+        login.username,
+        login.ip,
+        login.location,
+        login.timeString,
+        login.device,
+        login.downloadedFiles
+      );
+
+      if (evalResult.success) {
+        const isAnomalous = evalResult.riskScore >= 40;
+        if (isAnomalous) anomaliesCount++;
+        if (evalResult.autoSuspended) suspensionsCount++;
+
+        report.push({
+          username: login.username,
+          location: login.location,
+          timeString: login.timeString,
+          riskScore: evalResult.riskScore,
+          isThreat: isAnomalous,
+          reasons: evalResult.reasons,
+          actionTaken: evalResult.autoSuspended ? "AUTO-SUSPENDED" : (isAnomalous ? "FLAGGED FOR REVIEW" : "NONE"),
+          emailAlertSent: evalResult.emailAlertSent
+        });
+      } else {
+        // If user already suspended by previous step, log authentication block
+        report.push({
+          username: login.username,
+          location: login.location,
+          timeString: login.timeString,
+          riskScore: 100,
+          isThreat: true,
+          reasons: [evalResult.error || "Authentication blocked. User account is suspended."],
+          actionTaken: "BLOCKED",
+          emailAlertSent: false
+        });
+      }
+    }
+
+    console.log(`[AUDIT COMPLETED] Scanned ${logins.length} login logs. Detected ${anomaliesCount} anomalies. Triggered ${suspensionsCount} auto-suspensions.`);
+
+    res.json({
+      success: true,
+      scannedCount: logins.length,
+      anomaliesCount,
+      suspensionsCount,
+      report
+    });
+  } catch (err) {
+    console.error('[AUDIT FAILURE] Failed to execute Kaggle logs audit scanner.', err);
+    res.status(500).json({ success: false, error: "Failed to parse Kaggle dataset logs." });
+  }
 });
 
 // 11. POST Simulate Login (Runs behavioral check)

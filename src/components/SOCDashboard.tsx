@@ -1,5 +1,6 @@
-import React from 'react';
-import { Shield, ShieldAlert, Users, Activity, Play, AlertOctagon, UserX, UserCheck, CheckCircle, Info } from 'lucide-react';
+import React, { useState } from 'react';
+import { Shield, ShieldAlert, Users, Activity, Play, AlertOctagon, UserX, UserCheck, CheckCircle, Info, Mail, Phone, Terminal, RefreshCw, Radio } from 'lucide-react';
+import { playClickSound, playAlarmSound, playSuccessSound } from '../utils/audio';
 
 interface UserProfile {
   id: string;
@@ -50,6 +51,15 @@ interface SOCDashboardProps {
   onSelectIncident: (incident: any) => void;
   selectedIncidentId?: string;
   isSimulating: boolean;
+  settings: {
+    quantumSafeActive: boolean;
+    autoSuspensionThreshold: number;
+    smtpActive: boolean;
+    whatsappActive: boolean;
+    recipientEmail: string;
+    recipientWhatsapp: string;
+  };
+  onRefreshData: () => void;
 }
 
 export const SOCDashboard: React.FC<SOCDashboardProps> = ({
@@ -62,8 +72,13 @@ export const SOCDashboard: React.FC<SOCDashboardProps> = ({
   onResolveIncident,
   onSelectIncident,
   selectedIncidentId,
-  isSimulating
+  isSimulating,
+  settings,
+  onRefreshData
 }) => {
+  // Kaggle Audit state
+  const [auditReport, setAuditReport] = useState<any>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
 
   const getRiskBadgeColor = (score: number) => {
     if (score >= 75) return 'bg-red-950/40 text-neon-red border-red-500/30';
@@ -77,6 +92,29 @@ export const SOCDashboard: React.FC<SOCDashboardProps> = ({
     : 12;
 
   const totalSuspended = users.filter(u => u.status === 'SUSPENDED').length;
+
+  const runKaggleAudit = async () => {
+    playClickSound();
+    setIsAuditing(true);
+    try {
+      const res = await fetch('/api/audit-kaggle', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setAuditReport(data);
+        playAlarmSound();
+        onRefreshData(); // refresh active sessions on map/lists
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  const clearAuditLog = () => {
+    playSuccessSound();
+    setAuditReport(null);
+  };
 
   return (
     <div className="space-y-6">
@@ -130,7 +168,7 @@ export const SOCDashboard: React.FC<SOCDashboardProps> = ({
             <div className="cyber-panel-header">
               <div className="cyber-panel-title">
                 <Play className="text-glow-cyan text-neon-cyan" />
-                Insider Threat Threat Vector Simulator
+                Insider Threat Vector Simulator
               </div>
             </div>
 
@@ -282,6 +320,158 @@ export const SOCDashboard: React.FC<SOCDashboardProps> = ({
                 );
               })
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* New Row: Kaggle Audit Scanner & Notification Config */}
+      <div className="grid grid-cols-5 gap-6">
+        {/* Kaggle Log Auditor */}
+        <div className="col-span-3 cyber-panel flex flex-col min-h-[320px] justify-between">
+          <div>
+            <div className="cyber-panel-header">
+              <div className="cyber-panel-title">
+                <Radio className="text-glow-purple text-neon-purple animate-pulse" />
+                Kaggle Login Dataset Security Auditor
+              </div>
+            </div>
+            
+            <p className="text-xs text-text-muted mb-4">
+              Ingest and scan a Kaggle log dataset (`kaggle_logins.json`) mapping users, IPs, locations, and data scopes. Auto-flags unauthorized users and triggers configured SMTP/WhatsApp dispatches.
+            </p>
+
+            {auditReport ? (
+              <div className="space-y-4">
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-3 bg-bg-secondary/40 p-2.5 rounded border border-border-glow/30">
+                  <div className="text-center font-mono">
+                    <div className="text-[9px] text-text-muted uppercase">Scanned Logs</div>
+                    <div className="text-base font-bold text-neon-cyan">{auditReport.scannedCount}</div>
+                  </div>
+                  <div className="text-center font-mono">
+                    <div className="text-[9px] text-text-muted uppercase">Threats Flagged</div>
+                    <div className="text-base font-bold text-neon-amber">{auditReport.anomaliesCount}</div>
+                  </div>
+                  <div className="text-center font-mono">
+                    <div className="text-[9px] text-text-muted uppercase">Locked Out</div>
+                    <div className="text-base font-bold text-neon-red">{auditReport.suspensionsCount}</div>
+                  </div>
+                </div>
+
+                {/* Log terminal */}
+                <div className="bg-bg-primary border border-border-glow/40 p-2.5 rounded h-[140px] overflow-y-auto font-mono text-[10px] space-y-1.5 text-left">
+                  <div className="text-neon-cyan border-b border-border-glow/30 pb-1 mb-1">// SECURITY AUDIT LOG CONSOLE</div>
+                  {auditReport.report.map((item: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-start gap-2 border-b border-border-glow/10 pb-1">
+                      <span className="truncate max-w-[120px] font-bold text-text-bright">
+                        {item.username} ({item.location})
+                      </span>
+                      <span className="text-text-muted text-right">
+                        Risk: <span className={item.isThreat ? 'text-neon-red font-bold' : 'text-neon-green'}>{item.riskScore}%</span>
+                        {item.actionTaken !== "NONE" && <span className="ml-1 text-[8px] bg-red-950/20 text-neon-red border border-red-500/30 px-1 rounded">{item.actionTaken}</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="h-[210px] flex flex-col items-center justify-center border border-dashed border-border-glow/50 rounded bg-bg-secondary/10">
+                <Terminal className="w-10 h-10 text-border-glow mb-2" />
+                <div className="text-xs font-mono text-text-muted">Awaiting Audit Execution</div>
+                <button
+                  onClick={runKaggleAudit}
+                  disabled={isAuditing}
+                  className="cyber-btn cyber-btn-purple mt-4 px-4 py-2 text-xs flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
+                  {isAuditing ? 'Executing Scan...' : 'Run Kaggle Audit Scanner'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {auditReport && (
+            <div className="mt-4 flex justify-between gap-3">
+              <button
+                onClick={runKaggleAudit}
+                disabled={isAuditing}
+                className="cyber-btn border-border-glow text-xs flex items-center justify-center gap-1.5 flex-1"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
+                Rescan Dataset
+              </button>
+              <button
+                onClick={clearAuditLog}
+                className="cyber-btn cyber-btn-red text-xs py-2 px-4"
+              >
+                Clear Log
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Notification Config */}
+        <div className="col-span-2 cyber-panel flex flex-col justify-between min-h-[320px]">
+          <div>
+            <div className="cyber-panel-header">
+              <div className="cyber-panel-title">
+                <Mail className="text-glow-purple text-neon-purple" />
+                Alert Notification Channels
+              </div>
+            </div>
+
+            <p className="text-xs text-text-muted mb-4">
+              Real-time SMTP (email) and Twilio (WhatsApp) configuration indicators. Configure credentials in `server/.env` to switch from Simulator to Real Mode.
+            </p>
+
+            <div className="space-y-4">
+              {/* SMTP configuration status */}
+              <div className="p-3 bg-bg-secondary/30 border border-border-glow/50 rounded text-left space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-text-bright flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-neon-cyan" />
+                    SMTP Email Gateway
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                    settings.smtpActive 
+                      ? 'bg-green-500/10 text-neon-green border-green-500/30' 
+                      : 'bg-amber-500/10 text-neon-amber border-amber-500/30'
+                  }`}>
+                    {settings.smtpActive ? 'REAL DISPATCH' : 'SIMULATOR'}
+                  </span>
+                </div>
+                <div className="text-[10px] text-text-muted font-mono space-y-1">
+                  <div>Recipient: <span className="text-text-bright">{settings.recipientEmail || 'sanjeevkumarnagarajan2@gmail.com'}</span></div>
+                  <div className="text-[9px]">Trigger: Risk score matches or exceeds 40%</div>
+                </div>
+              </div>
+
+              {/* WhatsApp configuration status */}
+              <div className="p-3 bg-bg-secondary/30 border border-border-glow/50 rounded text-left space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-text-bright flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-neon-purple" />
+                    WhatsApp Alerts
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                    settings.whatsappActive 
+                      ? 'bg-green-500/10 text-neon-green border-green-500/30' 
+                      : 'bg-amber-500/10 text-neon-amber border-amber-500/30'
+                  }`}>
+                    {settings.whatsappActive ? 'REAL DISPATCH' : 'SIMULATOR'}
+                  </span>
+                </div>
+                <div className="text-[10px] text-text-muted font-mono space-y-1">
+                  <div>Mobile Target: <span className="text-text-bright">{settings.recipientWhatsapp || '+91XXXXXXXXXX'}</span></div>
+                  <div className="text-[9px]">Provider: Twilio Sandbox Messenger</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-2 bg-bg-secondary border border-border-glow/50 rounded text-[9px] text-text-muted font-mono flex items-center gap-1">
+            <Info className="w-3 h-3 text-neon-cyan flex-shrink-0" />
+            <span>Config loaded from server/.env environment variables.</span>
           </div>
         </div>
       </div>
