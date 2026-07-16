@@ -75,13 +75,19 @@ function App() {
     };
   }, []);
 
-  // Update selected incident reference if the incidents list updates
+  // Handle scroll progress tracking (GPU accelerated, zero-layout-shift)
   useEffect(() => {
-    if (selectedIncident && incidents.length > 0) {
-      const updated = incidents.find(i => i.id === selectedIncident.id);
-      if (updated) setSelectedIncident(updated);
-    }
-  }, [incidents]);
+    const handleScroll = () => {
+      const progressBar = document.getElementById('scroll-progress');
+      if (progressBar) {
+        const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const scrollPercent = totalHeight > 0 ? (window.scrollY / totalHeight) : 0;
+        progressBar.style.transform = `scaleX(${scrollPercent})`;
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Actions
   const handleSuspendUser = async (userId: string) => {
@@ -317,6 +323,10 @@ function App() {
 
   return (
     <div className="flex flex-col min-h-screen bg-transparent p-6 text-text-bright selection:bg-neon-cyan selection:text-bg-primary">
+      {/* Scroll Progress Indicator */}
+      <div className="scroll-progress-container">
+        <div id="scroll-progress" className="scroll-progress-bar" />
+      </div>
       
       {/* Top Banner Navigation Header */}
       <header className="cyber-panel p-4 mb-6 flex flex-wrap justify-between items-center gap-4">
