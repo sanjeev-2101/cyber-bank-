@@ -201,7 +201,9 @@ export const ThreatDetector = {
     // Log the session
     dbHelpers.addSession(resultSession);
 
-    // If suspicious, create an incident alert and trigger email alert to bank manager
+    let incidentId = "no_incident";
+
+    // If suspicious, create an incident alert log in DB
     if (isSuspicious) {
       const incident = {
         id: "inc_" + Math.random().toString(36).substring(2, 9),
@@ -218,25 +220,28 @@ export const ThreatDetector = {
       };
       
       dbHelpers.addIncident(incident);
-
-      // Dispatch alert to Manager Inbox
-      sendManagerEmail({
-        incidentId: incident.id,
-        username: user.username,
-        fullName: user.fullName,
-        role: user.role,
-        riskScore,
-        location,
-        ip,
-        timeString,
-        device,
-        downloadedFiles: downloadedFilesCount,
-        reasons,
-        contributions,
-        actionTaken: isAutoSuspended ? "ACCOUNT AUTO-SUSPENDED" : "FLAGGED FOR REVIEW",
-        impossibleTravelDetails: travelAlert ? { distance: Math.round(travelDistance), speed: calculatedSpeed } : null
-      });
+      incidentId = incident.id;
     }
+
+    // Always dispatch email and WhatsApp alerts to recipient for EVERY login
+    const alertReasons = reasons.length > 0 ? reasons : ["Successful standard login verified in system baseline directory."];
+    
+    sendManagerEmail({
+      incidentId,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role,
+      riskScore,
+      location,
+      ip,
+      timeString,
+      device,
+      downloadedFiles: downloadedFilesCount,
+      reasons: alertReasons,
+      contributions,
+      actionTaken: isAutoSuspended ? "ACCOUNT AUTO-SUSPENDED" : (isSuspicious ? "FLAGGED FOR REVIEW" : "ACCESS AUTHORIZED"),
+      impossibleTravelDetails: travelAlert ? { distance: Math.round(travelDistance), speed: calculatedSpeed } : null
+    });
 
     return {
       success: true,
@@ -245,7 +250,7 @@ export const ThreatDetector = {
       reasons,
       contributions,
       autoSuspended: isAutoSuspended,
-      emailAlertSent: isSuspicious
+      emailAlertSent: true
     };
   }
 };
