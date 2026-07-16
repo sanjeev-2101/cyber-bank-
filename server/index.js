@@ -94,6 +94,13 @@ app.post('/api/settings', (req, res) => {
   res.json({ success: true, settings: newSettings });
 });
 
+// Reset database endpoint
+app.post('/api/reset', (req, res) => {
+  dbHelpers.resetDb();
+  console.log('[SYSTEM RESET] Database and security records restored to defaults.');
+  res.json({ success: true, message: "System database reset successfully." });
+});
+
 // 11. POST Simulate Login (Runs behavioral check)
 app.post('/api/simulate-login', (req, res) => {
   const { username, ip, location, timeString, device, downloadedFiles } = req.body;

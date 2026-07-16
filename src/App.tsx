@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { Shield, ShieldAlert, Cpu, Brain, Mail, Monitor, RefreshCw } from 'lucide-react';
+import { Shield, ShieldAlert, Cpu, Brain, Mail, Monitor, RefreshCw, Volume2, VolumeX } from 'lucide-react';
 import { SOCDashboard } from './components/SOCDashboard';
 import { CyberGlobe } from './components/CyberGlobe';
 import { ExplainableAI } from './components/ExplainableAI';
 import { AIProfile } from './components/AIProfile';
 import { QPCManager } from './components/QPCManager';
 import { EmailAlerts } from './components/EmailAlerts';
+import { AIChatbot } from './components/AIChatbot';
+import { playClickSound, playAlarmSound, playSuccessSound, playQuantumSound, toggleMute, getMuteState } from './utils/audio';
 
 // Backend base URL (Vite proxy will route relative /api, but as a fallback we configure a direct url)
 const API_BASE = '/api';
@@ -149,6 +151,7 @@ function App() {
 
     try {
       if (scenarioType === 'NORMAL') {
+        playClickSound();
         setActiveLoginEvent({ fromCity: 'Chennai, India', isThreat: false });
         
         await fetch(`${API_BASE}/simulate-login`, {
@@ -167,6 +170,7 @@ function App() {
         setTimeout(() => setActiveLoginEvent(null), 5000);
 
       } else if (scenarioType === 'OFF_HOURS') {
+        playAlarmSound();
         setActiveLoginEvent({ fromCity: 'Chennai, India', isThreat: false });
 
         await fetch(`${API_BASE}/simulate-login`, {
@@ -185,6 +189,7 @@ function App() {
         setTimeout(() => setActiveLoginEvent(null), 5000);
 
       } else if (scenarioType === 'FOREIGN_IP') {
+        playAlarmSound();
         setActiveLoginEvent({ fromCity: 'Moscow, Russia', isThreat: true });
 
         await fetch(`${API_BASE}/simulate-login`, {
@@ -203,6 +208,7 @@ function App() {
         setTimeout(() => setActiveLoginEvent(null), 5000);
 
       } else if (scenarioType === 'EXFILTRATION') {
+        playAlarmSound();
         setActiveLoginEvent({ fromCity: 'Chennai, India', isThreat: true });
 
         await fetch(`${API_BASE}/simulate-login`, {
@@ -223,6 +229,7 @@ function App() {
       } else if (scenarioType === 'IMPOSSIBLE_TRAVEL') {
         // Impossible Travel is a 2-stage event
         // Stage 1: Charlie logs in from Chennai
+        playClickSound();
         setActiveLoginEvent({ fromCity: 'Chennai, India', isThreat: false });
         
         await fetch(`${API_BASE}/simulate-login`, {
@@ -242,6 +249,7 @@ function App() {
 
         // Stage 2: Wait 3 seconds, then Charlie logs in from London (Impossible travel!)
         setTimeout(async () => {
+          playAlarmSound();
           setActiveLoginEvent({ 
             fromCity: 'Chennai, India', 
             toCity: 'London, UK', 
@@ -284,6 +292,21 @@ function App() {
   });
 
   const unreadEmailsCount = emails.filter(e => e.unread).length;
+  const [isMuted, setIsMuted] = useState(getMuteState());
+
+  const handleTabChange = (tab: 'dashboard' | 'profiles' | 'qpc' | 'emails') => {
+    playClickSound();
+    setActiveTab(tab);
+  };
+
+  const handleMuteToggle = () => {
+    const nextMuted = toggleMute();
+    setIsMuted(nextMuted);
+    if (!nextMuted) {
+      // Play a quick test note to confirm unmute
+      playClickSound();
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-transparent p-6 text-text-bright selection:bg-neon-cyan selection:text-bg-primary">
@@ -299,16 +322,16 @@ function App() {
               CYBER_S.BANK // SECURITY SOC
             </h1>
             <div className="text-[10px] font-mono text-text-muted flex items-center gap-1.5 mt-0.5">
-              <span className="status-dot bg-neon-green"></span>
+              <span className="status-dot bg-neon-green animate-pulse"></span>
               <span>BEHAVIORAL AI & PRIVILEGE ENFORCEMENT ENGINE</span>
             </div>
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <nav className="flex gap-1.5">
+        <nav className="flex gap-1.5 items-center">
           <button
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => handleTabChange('dashboard')}
             className={`cyber-btn flex items-center gap-1.5 text-xs font-mono ${
               activeTab === 'dashboard' ? 'bg-neon-cyan/15 border-neon-cyan text-text-bright' : 'border-transparent text-text-muted hover:text-text-bright'
             }`}
@@ -318,17 +341,17 @@ function App() {
           </button>
           
           <button
-            onClick={() => setActiveTab('profiles')}
+            onClick={() => handleTabChange('profiles')}
             className={`cyber-btn flex items-center gap-1.5 text-xs font-mono ${
               activeTab === 'profiles' ? 'bg-neon-cyan/15 border-neon-cyan text-text-bright' : 'border-transparent text-text-muted hover:text-text-bright'
             }`}
           >
             <Brain className="w-3.5 h-3.5" />
-            AI baselines
+            AI Baselines
           </button>
 
           <button
-            onClick={() => setActiveTab('qpc')}
+            onClick={() => handleTabChange('qpc')}
             className={`cyber-btn flex items-center gap-1.5 text-xs font-mono ${
               activeTab === 'qpc' ? 'bg-neon-cyan/15 border-neon-cyan text-text-bright' : 'border-transparent text-text-muted hover:text-text-bright'
             }`}
@@ -338,7 +361,7 @@ function App() {
           </button>
 
           <button
-            onClick={() => setActiveTab('emails')}
+            onClick={() => handleTabChange('emails')}
             className={`cyber-btn flex items-center gap-1.5 text-xs font-mono relative ${
               activeTab === 'emails' ? 'bg-neon-cyan/15 border-neon-cyan text-text-bright' : 'border-transparent text-text-muted hover:text-text-bright'
             }`}
@@ -352,8 +375,19 @@ function App() {
             )}
           </button>
 
+          {/* Sound Mute Toggle */}
           <button
-            onClick={fetchAllData}
+            onClick={handleMuteToggle}
+            className={`cyber-btn border-border-glow p-2 flex items-center justify-center ${
+              isMuted ? 'text-neon-red hover:text-neon-cyan' : 'text-neon-green hover:text-neon-red'
+            }`}
+            title={isMuted ? "Unmute Cyber Soundscape" : "Mute Soundscape"}
+          >
+            {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+          </button>
+
+          <button
+            onClick={() => { playClickSound(); fetchAllData(); }}
             className="cyber-btn border-border-glow text-text-muted hover:text-neon-cyan p-2 flex items-center justify-center"
             title="Refresh Systems State"
           >
@@ -373,10 +407,10 @@ function App() {
                 sessions={sessions}
                 incidents={incidents}
                 onTriggerSimulation={handleTriggerSimulation}
-                onSuspendUser={handleSuspendUser}
-                onUnsuspendUser={handleUnsuspendUser}
-                onResolveIncident={handleResolveIncident}
-                onSelectIncident={setSelectedIncident}
+                onSuspendUser={(id) => { playClickSound(); handleSuspendUser(id); }}
+                onUnsuspendUser={(id) => { playSuccessSound(); handleUnsuspendUser(id); }}
+                onResolveIncident={(id) => { playSuccessSound(); handleResolveIncident(id); }}
+                onSelectIncident={(inc) => { playClickSound(); setSelectedIncident(inc); }}
                 selectedIncidentId={selectedIncident?.id}
                 isSimulating={isSimulating}
               />
@@ -398,7 +432,10 @@ function App() {
         {activeTab === 'qpc' && (
           <QPCManager 
             quantumSafeActive={settings.quantumSafeActive} 
-            onToggleQuantumSafe={handleToggleQuantumSafe} 
+            onToggleQuantumSafe={() => {
+              playQuantumSound();
+              handleToggleQuantumSafe();
+            }} 
           />
         )}
 
@@ -406,17 +443,26 @@ function App() {
           <EmailAlerts
             emails={emails}
             onMarkAsRead={handleMarkEmailAsRead}
-            onSuspendUser={handleSuspendUserByUsername}
-            onUnsuspendUser={handleUnsuspendUserByUsername}
+            onSuspendUser={(username) => {
+              playClickSound();
+              handleSuspendUserByUsername(username);
+            }}
+            onUnsuspendUser={(username) => {
+              playSuccessSound();
+              handleUnsuspendUserByUsername(username);
+            }}
             userStatuses={userStatuses}
           />
         )}
       </main>
 
+      {/* Floating AI Chatbot overlay */}
+      <AIChatbot />
+
       {/* Bottom status bar */}
       <footer className="mt-8 text-center text-[10px] font-mono text-text-muted border-t border-border-glow/30 pt-4 flex justify-between">
         <div>CONNECTED TERMINAL HOST: <span className="text-neon-cyan">CYBER_S.BANK_SOC_04</span></div>
-        <div>ENGINE VERSION: <span className="text-neon-purple">3.4.1-LWE</span></div>
+        <div>ENGINE VERSION: <span className="text-neon-purple font-bold">3.4.1-LWE // QUANTUM-PROOF</span></div>
         <div>DEEP LOGS SHIELDING: <span className="text-neon-green">ACTIVE</span></div>
       </footer>
     </div>

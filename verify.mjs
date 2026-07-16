@@ -20,6 +20,9 @@ async function runTests() {
   console.log('  CYBER_S.BANK SOC - AUTOMATED VERIFICATION SUITE');
   console.log('='.repeat(70));
 
+  // Reset database to active state
+  await post('/api/reset', {});
+
   // ---- TEST 1: Normal Login ----
   console.log('\n[TEST 1] Normal Login — Alice / Chennai / 9:30 AM');
   const r1 = await post('/api/simulate-login', {
